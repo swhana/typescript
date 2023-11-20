@@ -46,6 +46,172 @@ abstract class VisitorBase implements IVisitor {
   }
 }
 
+abstract class Handler<T> {
+  protected next: Handler<T> | null = null;
+  public SetNext(next: Handler<T>): void {
+    this.next = next;
+  }
+  public HandleRequest(request: T): void {
+    if (!this.CanHandle(request)) {
+      if (this.next !== null) {
+        this.next.HandleRequest(request); //다음 클래스로 요청 처리 넘기기
+      }
+      return;
+    }
+  }
+  protected abstract CanHandle(request: T): boolean;
+}
+
+class LineParser {
+  public Parse(value: string, tag: string): [boolean, string] {
+    let output: [boolean, string] = [false, ""];
+    output[1] = value;
+    if (value === "") {
+      return output;
+    }
+    let split = value.startsWith(`${tag}`);
+    if (split) {
+      output[0] = true;
+      output[1] = value.substring(tag.length);
+    }
+    return output;
+  }
+}
+
+class ParseChainHandler extends Handler<ParseElement> {
+  private readonly visitable: IVisitable = new Visitable();
+  protected CanHandle(request: ParseElement): boolean {
+    let split = new LineParser().Parse(request.CurrentLine, this.tagType);
+    if (split[0]) {
+      request.CurrentLine = split[1];
+      this.visitable.Accept(this.visitor, request, this.document);
+    }
+    return split[0];
+  }
+
+  constructor(
+    private readonly document: IMarkdownDocument,
+    private readonly tagType: string,
+    private readonly visitor: IVisitor
+  ) {
+    super();
+  }
+}
+
+class ParagraphHandler extends Handler<ParseElement> {
+  private readonly visitable: IVisitable = new Visitable();
+  private readonly visitor: IVisitor = new ParagraphVisitor();
+  protected CanHandle(request: ParseElement): boolean {
+    this.visitable.Accept(this.visitor, request, this.document);
+    return true;
+  }
+
+  constructor(private readonly document: IMarkdownDocument) {
+    super();
+  }
+}
+
+//핸들러 구현체
+class Header1ChainHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "# ", new Header1Visitor());
+  }
+}
+
+class Header2ChainHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "## ", new Header2Visitor());
+  }
+}
+
+class Header3ChainHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "### ", new Header3Visitor());
+  }
+}
+
+class Header4ChainHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "#### ", new Header4Visitor());
+  }
+}
+
+class Header5ChainHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "##### ", new Header5Visitor());
+  }
+}
+
+class Header6ChainHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "###### ", new Header6Visitor());
+  }
+}
+
+class HorizontalRuleHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "---", new HorizontalRuleVisitor());
+  }
+}
+
+class EmphasizeHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "* ", new EmphasizeVisitor());
+  }
+}
+
+class StrongHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "** ", new StrongVisitor());
+  }
+}
+
+class LinkHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "! ", new LinkVisitor());
+  }
+}
+
+class UnderscoreHandler extends ParseChainHandler {
+  constructor(document: IMarkdownDocument) {
+    super(document, "~~ ", new UnderscoreVisitor());
+  }
+}
+
+//방문자 패턴과 연결 책임 권한 패턴 연결하는 클래스
+class ChainOfResponsibilityFactory {
+  Build(document: IMarkdownDocument): ParseChainHandler {
+    let header1: Header1ChainHandler = new Header1ChainHandler(document);
+    let header2: Header2ChainHandler = new Header2ChainHandler(document);
+    let header3: Header3ChainHandler = new Header3ChainHandler(document);
+    let header4: Header4ChainHandler = new Header4ChainHandler(document);
+    let header5: Header5ChainHandler = new Header5ChainHandler(document);
+    let header6: Header6ChainHandler = new Header6ChainHandler(document);
+    let horizontalRule: HorizontalRuleHandler = new HorizontalRuleHandler(
+      document
+    );
+    let paragraph: ParagraphHandler = new ParagraphHandler(document);
+    let emphasize: EmphasizeHandler = new EmphasizeHandler(document);
+    let strong: StrongHandler = new StrongHandler(document);
+    let link: LinkHandler = new LinkHandler(document);
+    let underscore: UnderscoreHandler = new UnderscoreHandler(document);
+
+    header1.SetNext(header2);
+    header2.SetNext(header3);
+    header3.SetNext(header4);
+    header4.SetNext(header5);
+    header5.SetNext(header6);
+    header6.SetNext(horizontalRule);
+    horizontalRule.SetNext(emphasize);
+    emphasize.SetNext(strong);
+    strong.SetNext(link);
+    link.SetNext(underscore);
+    underscore.SetNext(paragraph);
+
+    return header1;
+  }
+}
+
 class Visitable implements IVisitable {
   Accept(
     visitor: IVisitor,
@@ -181,16 +347,45 @@ class HorizontalRuleVisitor extends VisitorBase {
   }
 }
 
+class Markdown {
+  public ToHtml(text: string): string {
+    let document: IMarkdownDocument = new MarkdownDocument();
+    let header1: Header1ChainHandler = new ChainOfResponsibilityFactory().Build(
+      document
+    );
+    let lines: string[] = text.split(`\n`);
+    for (let i = 0; i < lines.length; i++) {
+      let parseElement: ParseElement = new ParseElement();
+      parseElement.CurrentLine = lines[i];
+      header1.HandleRequest(parseElement);
+    }
+
+    return document.Get();
+  }
+}
+
 class HtmlHandler {
+  private markdownChange: Markdown = new Markdown();
   public TextChangeHandler(id: string, output: string): void {
     let markdown = <HTMLTextAreaElement>document.getElementById(id);
     let markdownOutput = <HTMLLabelElement>document.getElementById(output);
     if (markdown !== null) {
       //키보드 이벤트가 발생하면 텍스트 영역의 내용을 확인 후 그 내용대로 레이블의 innerHTML 설정
       markdown.onkeyup = (e) => {
-        if (markdown.value) markdownOutput.innerHTML = markdown.value;
-        else markdownOutput.innerHTML = "<p></p>";
+        this.RenderHtmlContent(markdown, markdownOutput);
+      };
+      window.onload = (e: Event) => {
+        this.RenderHtmlContent(markdown, markdownOutput);
       };
     }
+  }
+
+  private RenderHtmlContent(
+    markdown: HTMLTextAreaElement,
+    markdownOutput: HTMLLabelElement
+  ) {
+    if (markdown.value)
+      markdownOutput.innerHTML = this.markdownChange.ToHtml(markdown.value);
+    else markdownOutput.innerHTML = "<p></p>";
   }
 }
