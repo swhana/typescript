@@ -9,7 +9,7 @@
       integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9"
       crossorigin="anonymous"
     />
-    <title>Document</title>
+    <title>Markdown Editor</title>
     <style>
       html,
       body {
@@ -43,5 +43,9 @@
       integrity="sha384-Rx+T1VzGupg4BHQYs2gCW9It+akI2MM/mndMCy36UVfodzcJcF0GGLxZIzObiEfa"
       crossorigin="anonymous"
     ></script>
+    <script src="script/MarkdownParser.js"></script>
+    <script>
+      new HtmlHandler().TextChangeHandler("markdown", "markdown-output");
+    </script>
   </body>
 </html>
