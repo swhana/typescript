@@ -13,7 +13,68 @@ enum TagType {
   HorizontalRule, //수평선
 }
 
-//tagType을 HTML 태그에 매핑하는 단일 책임 원칙을 지킴
+interface IMarkdownDocument {
+  Add(...content: string[]): void;
+  Get(): string;
+}
+
+//방문자 인터페이스
+interface IVisitor {
+  Visit(token: ParseElement, markdownDocument: IMarkdownDocument): void;
+}
+
+//방문 가능한 객체 인터페이스
+interface IVisitable {
+  Accept(
+    visitor: IVisitor,
+    token: ParseElement,
+    markdownDocument: IMarkdownDocument
+  ): void;
+}
+
+abstract class VisitorBase implements IVisitor {
+  constructor(
+    private readonly tagType: TagType,
+    private readonly TagTypeToHtml: TagTypeToHtml
+  ) {}
+  Visit(token: ParseElement, markdownDocument: IMarkdownDocument): void {
+    markdownDocument.Add(
+      this.TagTypeToHtml.OpeningTag(this.tagType),
+      token.CurrentLine,
+      this.TagTypeToHtml.ClosingTag(this.tagType)
+    );
+  }
+}
+
+class Visitable implements IVisitable {
+  Accept(
+    visitor: IVisitor,
+    token: ParseElement,
+    markdownDocument: IMarkdownDocument
+  ): void {
+    visitor.Visit(token, markdownDocument);
+  }
+}
+
+//content 업데이트만을 수행하는 클래스(단일 책임 원칙)
+class MarkdownDocument implements IMarkdownDocument {
+  private content: string = "";
+  Add(...content: string[]): void {
+    content.forEach((element) => {
+      this.content += element;
+    });
+  }
+  Get(): string {
+    return this.content;
+  }
+}
+
+//현재 파싱 처리 중인 줄을 표시하는 클래스
+class ParseElement {
+  CurrentLine: string = "";
+}
+
+//tagType을 HTML 태그에 매핑하는 역할을 수행하는 클래스(단일 책임 원칙)
 class TagTypeToHtml {
   private readonly tagType: Map<TagType, string> = new Map<TagType, string>();
   constructor() {
@@ -45,6 +106,78 @@ class TagTypeToHtml {
       return `${openingTagPattern}${tag}>`;
     }
     return `${openingTagPattern}p>`;
+  }
+}
+
+class ParagraphVisitor extends VisitorBase {
+  constructor() {
+    super(TagType.Paragraph, new TagTypeToHtml());
+  }
+}
+
+class Header1Visitor extends VisitorBase {
+  constructor() {
+    super(TagType.Header1, new TagTypeToHtml());
+  }
+}
+
+class Header2Visitor extends VisitorBase {
+  constructor() {
+    super(TagType.Header2, new TagTypeToHtml());
+  }
+}
+
+class Header3Visitor extends VisitorBase {
+  constructor() {
+    super(TagType.Header3, new TagTypeToHtml());
+  }
+}
+
+class Header4Visitor extends VisitorBase {
+  constructor() {
+    super(TagType.Header4, new TagTypeToHtml());
+  }
+}
+
+class Header5Visitor extends VisitorBase {
+  constructor() {
+    super(TagType.Header5, new TagTypeToHtml());
+  }
+}
+
+class Header6Visitor extends VisitorBase {
+  constructor() {
+    super(TagType.Header6, new TagTypeToHtml());
+  }
+}
+
+class UnderscoreVisitor extends VisitorBase {
+  constructor() {
+    super(TagType.Underscore, new TagTypeToHtml());
+  }
+}
+
+class EmphasizeVisitor extends VisitorBase {
+  constructor() {
+    super(TagType.Emphasize, new TagTypeToHtml());
+  }
+}
+
+class StrongVisitor extends VisitorBase {
+  constructor() {
+    super(TagType.Strong, new TagTypeToHtml());
+  }
+}
+
+class LinkVisitor extends VisitorBase {
+  constructor() {
+    super(TagType.Link, new TagTypeToHtml());
+  }
+}
+
+class HorizontalRuleVisitor extends VisitorBase {
+  constructor() {
+    super(TagType.HorizontalRule, new TagTypeToHtml());
   }
 }
 
